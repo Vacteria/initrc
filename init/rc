@@ -1,0 +1,251 @@
+#!/bin/sh
+
+#
+# Export default paths
+#
+export PATH=/sbin:/usr/sbin:/bin:/usr/bin
+export CONCURRENCY="makefile"
+
+#
+# These 3 signals will not cause our script to exit
+#
+trap "" INT QUIT TSTP
+
+#
+# Mount devtmpfs to read /dev/console
+#
+if ! mountpoint -q /dev
+then
+	if mount -t devtmpfs devtmpfs /dev
+	then
+		[ -c /dev/null ] && rm -f /dev/null
+		[ ! -c /dev/console ] && mknod -m 640 /dev/console c 5 1
+		mknod -m 666 /dev/null c 1 3
+	fi
+fi
+
+exec < /dev/console > /dev/console 2>&1
+
+#
+# Set onlcr to avoid staircase effect.
+#
+stty onlcr 0>&1
+
+#
+# Set runlevel by first argument and previus level
+# from enviroment variable
+#
+case "${1}" in
+	S|[0-6] ) 
+		runlevel="${1}"
+	;;
+	* )
+		printf 'Usage: %s <runlevel>\n' ${0} >&2
+		exit 1
+	;;
+esac
+prevlevel="${PREVLEVEL:-N}"
+
+export runlevel prevlevel
+
+#
+# Global settings
+#
+runrc=/etc/rc${runlevel}.d
+prerc=/etc/rc${prevlevel}.d
+rex="[0-9][0-9]"
+
+log_action_msg()  { printf "${@}\n"; }
+log_failure_msg() { printf "${@}\n"; }
+log_warning_msg() { printf "${@}\n"; }
+
+#
+# Mount tmpfs filesystem on /run to use as virtual sh memory, read-write
+# directory and temporal PID directory
+#
+if ! mountpoint -q /run
+then
+	if ! mount -t tmpfs -o nodev,nosuid,mode=0755 tmpfs /run
+	then
+		log_failure_msg 'Unable to mount tmpfs on /run. Press enter to shutdown.'
+		read
+		poweroff -f
+	else
+		mkdir -p /run/{var,lock,shm}
+		chmod 1777 /run/shm
+		ln -sf /run/shm /dev/shm
+	fi
+fi
+
+
+#
+# Check if we are able to use make like booting
+#
+if [ "${CONCURRENCY}" == "makefile" ]
+then
+	test -s /etc/rc.d/.depend.boot  || CONCURRENCY="none"
+	test -s /etc/rc.d/.depend.start || CONCURRENCY="none"
+	test -s /etc/rc.d/.depend.stop  || CONCURRENCY="none"
+	startpar -v    > /dev/null 2>&1 || CONCURRENCY="none"
+fi
+
+case ${prevlevel} in
+	0|6 ) action="stopt" ;;
+	*   ) action="start" ;;
+esac
+
+#
+# Common startup fucntion.
+#
+startup()
+{
+	local action script scripts
+
+	if [ "${CONCURRENCY}" == "makefile" ]
+	then
+		log_action_msg "Using makefile-style concurrent boot in runlevel $runlevel"
+		eval "$(startpar -p 4 -t 20 -T 3 -M ${1} -P ${prevlevel} -R ${runlevel})"
+		
+		if [ -n "$failed_service" ]
+		then
+			log_failure_msg "startpar: service(s) returned failure: $failed_service"
+		fi
+
+		if [ -n "$skipped_service" ]
+		then
+			log_warning_msg "startpar: service(s) skipped: $skipped_service"
+		fi
+		
+		unset failed_service skipped_service
+	else
+		action=${1}
+		shift
+		scripts="${@}"
+		for script in ${scripts}
+		do
+			${script} ${action}
+		done
+	fi
+}
+
+#
+# Stop running services not enabled in new runlevel
+#
+if [ "${CONCURRENCY}" == "makefile" ]
+then
+	if [[ "${action}" == "start" && "${prevlevel}" != N ]]
+	then
+		startup stop
+	fi
+elif [ "${prevlevel}" != "N" ]
+then
+	# Run all scripts with the same level in concurrency mode
+
+	curlevel=""
+	for s in ${runrc}/K*
+	do
+		# Extract order value from symlink
+		level=${s#${runrc}/K}
+		level=${level%%[a-zA-Z]*}
+		[ "${level}" == "${curlevel}" ] && continue
+		curlevel=${level}
+
+		scripts=""
+		for i in ${runrc}/K${level}*
+		do
+			# Check if the script is there.
+			[ ! -f ${i} ] && continue
+
+			#
+			# Find stop script in previous runlevel but
+			# no start script there.
+			#
+			suffix=${i#${runrc}/K${rex}}
+			previous_stop=${prerc}/K${rex}${suffix}
+			previous_start=${prerc}/S${rex}${suffix}
+
+			#
+			# If there is a stop script in the previous level
+			# and _no_ start script there, we don't
+			# have to re-stop the service.
+			#
+			[ -f ${previous_stop} ] && [ ! -f ${previous_start} ] && continue
+
+			# Stop the service.
+			scripts="${scripts} ${i}"
+		done
+		startup stop ${scripts}
+	done
+
+	unset curlevel level scripts suffix previus_stop previus_start
+fi
+
+#
+# Start services required to enter new runlevel
+#
+if [ "${CONCURRENCY}" == "makefile" ]
+then
+	if [ "${runlevel}" == "S" ]
+	then
+		startup boot
+	else
+		startup ${action}
+	fi
+else
+	# Now run the START scripts for this runlevel.
+	# Run all scripts with the same level in concurency mode
+
+	curlevel=""
+	for s in /etc/rc$runlevel.d/S*
+	do
+		# Extract order value from symlink
+		level=${s#${runrc}/S}
+		level=${level%%[a-zA-Z]*}
+		[ "${level}" = "${curlevel}" ] && continue
+		curlevel=${level}
+
+		sripts=""
+		for i in ${runrc}/S${level}*
+		do
+			[ ! -f ${i} ] && continue
+
+			suffix=${i#${runrc}/S${rex}}
+			if [ "${prevlevel}" != N ]
+			then
+				#
+				# Find start script in previous runlevel and
+				# stop script in this runlevel.
+				#
+				stop=${runrc}/K${rex}${suffix}
+				previous_start=${prerc}/S${rex}${suffix}
+
+				#
+				# If there is a start script in the previous level
+				# and _no_ stop script in this level, we don't
+				# have to re-start the service.
+				#
+				if [ "${action}" == "start" ] ; then
+					[ -f ${previous_start} ] && [ ! -f ${stop} ] && continue
+				else
+					# Workaround for the special
+					# handling of runlevels 0 and 6.
+					previous_stop=${prerc}/K${rex}${suffix}
+
+					#
+					# If there is a stop script in the previous level
+					# and _no_ start script there, we don't
+					# have to re-stop the service.
+					#
+					[ -f ${previous_stop} ] && [ ! -f ${previous_start} ] && continue
+				fi
+
+			fi
+			scripts="${scripts} ${i}"
+		done
+		startup ${action} ${scripts}
+	done
+
+	unset curlevel level scripts suffix previus_stop previus_start stop
+fi
+
+unset runrc prerc rex

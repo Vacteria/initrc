@@ -1,0 +1,6 @@
+# Add custom files and directories. The format is :
+#
+# Type | Path | Perms | Owner | Group
+# -------------------------------
+dir /tmp/.ICE-unix 1777 root root
+

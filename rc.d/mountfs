@@ -1,0 +1,69 @@
+#!/bin/sh
+
+###
+# Vacteria System init script, Created on lun ene 10 14:12:34 CST 2011
+# This file is free software and is released under GPL v2.1 or grant.
+###
+
+### BEGIN INIT INFO
+# Provides:          mountfs
+# Required-Start:    udev checkfs
+# Required-Stop:
+# Should-Start: 
+# Should-Stop:  
+# X-Start-Before:    
+# X-Stop-After: 
+# Default-Start:     S
+# Default-Stop:      0 6
+# X-Interactive:
+# X-vct-Provided-By: Vacteria
+# Short-Description: Mounts/unmounts local filesystems defined in /etc/fstab
+# Description:       Remounts root filesystem read/write and mounts all
+#                    remaining local filesystems defined in /etc/fstab on
+#                    start.  Remounts root filesystem read-only and unmounts
+#                    remaining filesystems on stop.
+### END INIT INFO
+
+. /lib/init/init-functions
+
+rc_start()
+{
+	rc_message "Remounting root file system in read-write mode"
+	mount -n -o remount,rw / >/dev/null || failed=1
+	rc_return
+	
+	if [ "${failed}" == "0" ]
+	then
+		rc_message "Recording existing mounts in /etc/mtab"
+		rm -f ./fastboot ./forcefsck
+		rm /etc/mtab
+		> /etc/mtab
+
+		mount -f /     || failed=1
+		mount -f /proc || failed=1
+		mount -f /sys  || failed=1
+		mount -f /run  || failed=1
+		mount -f /dev  || failed=1
+		
+		(exit ${failed})
+		rc_return
+	fi
+	
+	rc_message "Mounting all local filesystems in fstab"
+	mount -a -O no_netdev >/dev/null
+	rc_return
+}
+
+rc_stop()
+{
+	rc_message "Unmounting all other currently mounted file systems"
+	[ -f /run/utmp ] && cat /run/utmp > /var/lib/utmp
+	umount -a -d -r -t notmpfs,nosysfs,nodevtmpfs,noproc
+	rc_return
+}
+
+case ${1} in
+	start   ) rc_start   ;;
+	stop    ) rc_stop    ;;
+	*       ) rc_error   ;;
+esac

@@ -1,0 +1,50 @@
+#!/bin/sh
+
+###
+# Vacteria System init script, Created on lun ene 10 14:12:34 CST 2011
+# This file is free software and is released under GPL v2.1 or grant.
+###
+
+### BEGIN INIT INFO
+# Provides:           sendsigs
+# Required-Start:    
+# Required-Stop:      $local_fs swap localnet
+# Should-Start:
+# Should-Stop: 
+# X-Start-Before:    
+# X-Stop-After:
+# Default-Start:      
+# Default-Stop:       0 6
+# X-Interactive:     
+# X-vct-Provided-By:  Vacteria
+# Short-Description:  Attempts to kill remaining processes.
+# Description:        Attempts to kill remaining processes.
+### END INIT INFO
+
+. /lib/init/init-functions
+
+rc_stop()
+{
+	rc_message "Sending all processes the TERM signal"
+	killall5 -15
+	error_value=${?}
+	sleep ${killdelay}
+	case ${error_value} in
+		0|2 ) rc_done ;;
+		*   ) rc_fail ;;
+	esac
+	
+	rc_message "Sending all processes the KILL signal"
+	killall5 -9
+	error_value=${?}
+	sleep ${killdelay}
+	case ${error_value} in
+		0|2 ) rc_done ;;
+		*   ) rc_fail ;;
+	esac
+}
+
+case ${1} in
+	stop    ) rc_stop    ;;
+	*       ) rc_error   ;;
+esac

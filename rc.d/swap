@@ -1,0 +1,74 @@
+#!/bin/sh
+
+###
+# Vacteria System init script, Created on lun ene 10 14:12:34 CST 2011
+# This file is free software and is released under GPL v2.1 or grant.
+###
+
+### BEGIN INIT INFO
+# Provides:          swap
+# Required-Start:    udev
+# Required-Stop:
+# Should-Start:      
+# Should-Stop:       
+# X-Start-Before:    
+# X-Stop-After:      
+# Default-Start:     S
+# Default-Stop:      0 6
+# X-Interactive:     
+# X-vct-Provided-By: Vacteria
+# Short-Description: Mounts and unmounts swap partitions.
+# Description:       Mounts and unmounts swap partitions defined in
+#                    /etc/fstab.
+### END INIT INFO
+
+. /lib/init/init-functions || exit 6
+. /etc/rc.conf.d/swap      || exit 6
+
+rc_start()
+{
+	if [ "${COMPRESSION}" == "1" ]
+	then
+		rc_message "Setting dynamic swap compression"
+		if modprobe zram
+		then
+			echo ${DISKSIZE:-536870912} > /sys/block/zram0/disksize 
+			mkswap /dev/zram0 >/dev/null 
+			swapon /dev/zram0 -p ${PRIORITY:-32767}
+			echo 100 > /proc/sys/vm/swappiness
+		fi
+		rc_done
+	fi
+	
+	rc_message "Activating all swap files/partitions"
+	swapon -a
+	rc_return
+}
+
+rc_stop()
+{
+	rc_message "Deactivating all swap files/partitions"
+	swapoff -a
+	rc_return
+}
+
+rc_restart()
+{
+	${0} stop
+	sleep 1
+	${0} start
+}
+
+rc_status()
+{
+	rc_message "Retrieving swap status\n"
+	swapon -s
+}
+
+case ${1} in
+	start   ) rc_start   ;;
+	stop    ) rc_stop    ;;
+	restart ) rc_restart ;;
+	status  ) rc_status  ;;
+	*       ) rc_error   ;;
+esac

@@ -1,0 +1,60 @@
+#!/bin/sh
+
+###
+# Vacteria System init script, Created on lun ene 10 14:12:34 CST 2011
+# This file is free software and is released under GPL v2.1 or grant.
+###
+
+### BEGIN INIT INFO
+# Provides:          localnet
+# Required-Start:
+# Required-Stop:
+# Should-Start:
+# Should-Stop:       
+# X-Start-Before:    
+# X-Stop-After:      
+# Default-Start:     S
+# Default-Stop:      0 6
+# X-Interactive:     
+# X-vct-Provided-By: Vacteria
+# Short-Description: Setting loopback interface
+# Description:       Setting loopback interface lo before start
+#                    all other interfaces
+### END INIT INFO
+
+. /lib/init/init-functions
+
+rc_start()
+{
+	rc_message "Bringing up the loopback interfac"
+	ip addr add 127.0.0.1/8 label lo dev lo
+	ip link set lo up
+	rc_done
+}
+
+rc_stop()
+{
+	rc_message "Bringing down the loopback interface"
+	ip link set lo down
+	rc_done
+}
+
+rc_restart()
+{
+	${0} stop
+	sleep 1
+	${0} start
+}
+
+rc_status()
+{
+	ip link show lo
+}
+
+case ${1} in
+	start   ) rc_start   ;;
+	stop    ) rc_stop    ;;
+	restart ) rc_restart ;;
+	status  ) rc_status  ;;
+	*       ) rc_error   ;;
+esac

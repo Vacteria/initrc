@@ -1,0 +1,46 @@
+#!/bin/sh
+
+###
+# Vacteria System init script, Created on lun ene 10 14:12:34 CST 2011
+# This file is free software and is released under GPL v2.1 or grant.
+###
+
+### BEGIN INIT INFO
+# Provides:          hostname
+# Required-Start:
+# Required-Stop:
+# Should-Start:
+# Should-Stop:       
+# X-Start-Before:    
+# X-Stop-After:      
+# Default-Start:     S
+# Default-Stop:
+# X-Interactive:     
+# X-vct-Provided-By: Vacteria      
+# Short-Description: Set hostname
+# Description:       Set system hostname for latter process
+### END INIT INFO
+
+. /lib/init/init-functions
+. /etc/rc.conf.d/hostname || exit 1
+
+rc_start()
+{
+	hostname="${HOSTNAME:-$(< /proc/sys/kernel/hostname)}"
+	rc_message "Setting default hostname"
+	echo "${hostname}" >| /proc/sys/kernel/hostname || failed="1"
+	
+	(exit ${failed})
+	rc_return
+}
+
+rc_status()
+{
+	printf 'Hostname is : %s' "$(< /proc/sys/kernel/hostname)"
+}
+
+case ${1} in
+	start   ) rc_start   ;;
+	status  ) rc_status  ;;
+	*       ) rc_error   ;;
+esac

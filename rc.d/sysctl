@@ -1,0 +1,45 @@
+#!/bin/sh
+
+###
+# Vacteria System init script, Created on lun ene 10 14:12:34 CST 2011
+# This file is free software and is released under GPL v2.1 or grant.
+###
+
+### BEGIN INIT INFO
+# Provides:          sysctl
+# Required-Start:
+# Required-Stop:
+# Should-Start:      
+# Should-Stop:       
+# X-Start-Before:    
+# X-Stop-After:      
+# Default-Start:     S
+# Default-Stop:      
+# X-Interactive:     
+# X-vct-Provided-By: Vacteria
+# Short-Description: Load kernel parameters
+# Description:       Setup kernel runtime parameters
+### END INIT INFO
+
+. /lib/init/init-functions
+[ ! -f /etc/sysctl.conf ] && exit 1
+
+rc_start()
+{
+	rc_message "Setting kernel runtime parameters"
+	sysctl -q -p
+	rc_return
+}
+
+rc_status()
+{
+	sysctl -a
+
+	return 0
+}
+
+case ${1} in
+	start   ) rc_start   ;;
+	status  ) rc_status  ;;
+	*       ) rc_error   ;;
+esac

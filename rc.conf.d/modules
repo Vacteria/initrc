@@ -1,0 +1,9 @@
+#
+# Add custom kernel modules to be loaded at the start process
+# The format is :
+#
+# Module | Arguments
+# -------------------------
+# nouveau acpi=0
+# aufs
+

@@ -1,0 +1,71 @@
+#!/bin/sh
+
+###
+# Vacteria System init script, Created on lun ene 10 14:12:34 CST 2011
+# This file is free software and is released under GPL v2.1 or grant.
+###
+
+### BEGIN INIT INFO
+# Provides:          console
+# Required-Start:
+# Required-Stop:
+# Should-Start:
+# Should-Stop:
+# Default-Start:      S
+# Default-Stop:
+# Short-Description:  Seting all consoles
+# Description:        Setup all consoles mentioned on /etc/inittab
+### END INIT INFO
+
+. /lib/init/init-functions
+. /etc/rc.conf.d/console || exit 1
+
+rc_start()
+{
+	local bin
+
+	rc_message "Setting console font and mode"
+
+	for bin in kbd_mode setfont
+	do
+		if ! rc_command ${bin}
+		then
+			rc_warning
+			log_warning_msg '%s binary not found' "${bin}"
+			exit 0
+		fi
+	done
+
+	if ! rc_bolean ${UNICODE}
+	then
+		for i in /dev/tty[0-9]*
+		do
+				kbd_mode -u < ${i}    || failed="1"
+				printf "\e%%G" > ${i} || failed="1"
+		done
+		echo 1 > /sys/module/vt/parameters/default_utf8 || failed="1"
+	else
+		for i in /dev/tty[0-9]*
+		do
+				kbd_mode -a < ${i}    || failed="1"
+				printf "\e%%@" > ${i} || failed="1"
+		done
+		echo 0 > /sys/module/vt/parameters/default_utf8
+	fi
+	
+	if [ -n "${CONSOLEFONT}" ]
+	then
+		for i in /dev/tty[0-9]*
+		do
+			setfont "${CONSOLEFONT}" -C ${i} &>/dev/null || failed="1"
+		done
+	fi
+	
+	( exit ${failed} )
+	rc_return
+}
+
+case ${1} in
+	start   ) rc_start   ;;
+	*       ) rc_error   ;;
+esac

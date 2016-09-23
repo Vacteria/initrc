@@ -1,0 +1,161 @@
+#!/bin/sh
+
+#
+# Global variables
+#
+PATH=/bin:/sbin:/usr/bin:/usr/sbin
+
+#
+# Internal variables
+#
+RC_COL_NUM="$(tput cols)"
+RC_MAX_MSG="$(( ${RC_COL_NUM} - 12 ))"
+RC_NORMAL="\e[m"
+RC_DONE="\e[1;32m"
+RC_WARN="\e[1;33m"
+RC_FAIL="\e[1;31m"
+RC_BOLD="\e[1;37;40m"
+
+RC_FUNCTIONS="
+	rc_start
+	rc_stop
+	rc_restart
+	rc_reaload
+	rc_status
+"
+
+#
+# External variebles rc script usables
+#
+failed="0"
+use_fb="0"
+killdelay="1"
+
+#
+# General proupuse print functions
+#
+
+#
+# Replace all Uppercase alpha characters into Lowercase
+#
+rc_lower() { echo ${@} | tr '[[:upper:]]' '[[:lower:]]'; }
+
+#
+# Replace all Lowercase alpha characters into Uppercase
+#
+rc_upper() { echo ${@} | tr '[[:lower:]]' '[[:uper:]]'; }
+
+#
+# Print generic message befor run any command inside rc script
+#
+rc_message()
+{
+	local MSG="${1}"
+	
+	if [ "$(echo ${MSG} | wc -m)" -ge "${RC_MAX_MSG}" ]
+	then
+		MSG="${MSG:0:${RC_MAX_MSG}}"
+	fi
+	
+	printf "${MSG}"
+}
+
+#
+# Print if everything is ok
+#
+rc_done() { printf " ... ${RC_DONE} Done${RC_NORMAL}\n"; }
+
+#
+# Print if exist any warning
+#
+rc_warn() { printf " ... ${RC_WARN} Warn${RC_NORMAL}\n"; }
+
+#
+# Print if somthing is wrong
+#
+rc_fail() { printf " ... ${RC_FAIL} Fail${RC_NORMAL}\n"; }
+
+#
+# Use aprpiate print function for any case evaluating previus
+# function output code
+#
+rc_return()
+{
+	local code=${?}
+
+	case ${code} in
+		0         ) rc_done ;;
+		1|2|4|5|7 ) rc_fail ;;
+		3         ) rc_warn ;;
+	esac
+
+	return ${code}
+}
+
+#
+# Return 2 error code if then option passed to script is not 
+# listed in valid functions or does not exist inside script
+#
+rc_error()
+{
+	local F I
+	declare -a V
+	
+	I="${1##*/}"
+	
+	for F in ${RC_FUNCTIONS}
+	do
+		if command -v ${F} >/dev/null
+		then
+			V+=(${F##rc_})
+		fi
+	done
+
+	if [ "${#V[@]}" -eq "0" ] 
+	then
+		rc_message "$(printf '%s does not accept argument' "${I}")"
+		rc_warn
+		exit 2
+	else	
+		rc_message "$(printf 'Usage : %s\n' "[$(echo ${V[@]} | tr ' ' '|')]" )"
+		rc_fail
+		
+		exit 2
+	fi
+}
+
+#
+# Convert any alpha bolean equivalence expresion from the input into
+# return bolean state
+#
+# 0 = If alpha expresion is any true diferent expresion
+# 1 = If alpha expresion is true|yes|enable
+#
+rc_bolean()
+{
+	case "$(rc_lower ${1})" in
+		1|true|yes| enable ) return 1 ;;
+	esac
+	
+	return 0
+}
+
+#
+# Search command across builtin 'command' function
+#
+# Return codes :
+#
+# 0 = If command found
+# 1 = If command not found
+#
+rc_command()
+{
+	[ -z "${1}" ] && return 1
+	
+	if ! builtin command -v ${1} >/dev/null 
+	then
+		return 1
+	fi
+	
+	return 0
+}

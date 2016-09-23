@@ -1,0 +1,59 @@
+#!/bin/sh
+
+###
+# Vacteria System init script, Created on lun ene 10 14:12:34 CST 2011
+# This file is free software and is released under GPL v2.1 or grant.
+###
+
+### BEGIN INIT INFO
+# Provides:          files
+# Required-Start:    mountfs
+# Required-Stop:
+# Should-Start:      
+# Should-Stop:       
+# X-Start-Before:    
+# X-Stop-After:      
+# Default-Start:     S
+# Default-Stop:      
+# X-Interactive:     
+# X-vct-Provided-By: Vacteria
+# Short-Description: Create files and directories
+# Description:       Create custom files and directories before system boot
+### END INIT INFO
+
+. /lib/init/init-functions || exit 1
+
+rc_start()
+{
+	if [ -f /etc/rc.conf.d/files ]
+	then
+		rc_message "Making custom system files"
+		while read mytype mypath mymode myowner mygroup
+		do
+			for i in ${mytype} ${mypath} ${mymode} ${myowner} ${mygroup}
+			do
+				[ -z "${i}" ] && continue
+			done
+
+			case ${mytype} in
+				""|"#"*) continue ;;
+				dir  ) 
+					install -d -m ${mymode} -o ${myowner} -g ${mygroup} ${mypath} || failed="1"
+				;;
+				file ) 
+					touch ${mypath}                       || failed="1"
+					chown ${myowner}:${mygroup} ${mypath} || failed="1"
+					chmod ${mymode} ${mypath}             || failed="1"
+				;;
+			esac
+		done < /etc/rc.conf.d/files
+	fi
+
+	( exit ${failed} )
+	rc_return
+}
+
+case ${1} in
+	start   ) rc_start   ;;
+	*       ) rc_error   ;;
+esac

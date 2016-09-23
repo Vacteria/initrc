@@ -1,0 +1,49 @@
+#!/bin/sh
+
+###
+# Vacteria System init script, Created on lun ene 10 14:12:34 CST 2011
+# This file is free software and is released under GPL v2.1 or grant.
+###
+
+### BEGIN INIT INFO
+# Provides:          keymap
+# Required-Start:
+# Required-Stop:     
+# Should-Start:
+# Should-Stop:       
+# X-Start-Before:    
+# X-Stop-After:      
+# Default-Start:     S
+# Default-Stop:      
+# X-Interactive:     
+# X-vct-Provided-By: Vacteria
+# Short-Description: Set keyborad layout
+# Description:       Set keyboard layout but only on kernel side. To
+#                    configure X keyboard layout use aporpiate desktop 
+#                    application provide for you vendor
+### END INIT INFO
+
+. /lib/init/init-functions
+. /etc/rc.conf.d/keyboard
+
+rc_start()
+{
+	rc_command "loadkeys" && exit 0
+
+	if [ -n "${KEYMAP}" ]
+	then
+		rc_message "Loading console keymap"
+		loadkeys ${KEYMAP} >/dev/null 2>&1
+		[ -n "${KEYMAP_CORRECTIONS}" ] && loadkeys ${KEYMAP_CORRECTIONS} >/dev/null 2>&1
+		[ -n "$LEGACY_CHARSET" ] && dumpkeys -c "${LEGACY_CHARSET}" | loadkeys -u >/dev/null 2>&1
+		rc_done
+	else
+		rc_message "No custom keymap found"
+		rc_done
+	fi
+}
+
+case ${1} in
+	start   ) rc_start   ;;
+	*       ) rc_error   ;;
+esac

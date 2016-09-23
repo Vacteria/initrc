@@ -1,0 +1,47 @@
+#!/bin/sh
+
+###
+# Vacteria System init script, Created on lun ene 10 14:12:34 CST 2011
+# This file is free software and is released under GPL v2.1 or grant.
+###
+
+### BEGIN INIT INFO
+# Provides:          modules
+# Required-Start:
+# Required-Stop:
+# Should-Start:     
+# Should-Stop:       
+# X-Start-Before:    udev
+# X-Stop-After:      
+# Default-Start:     S
+# Default-Stop:      
+# X-Interactive:     
+# X-vct-Provided-By: Vacteria
+# Short-Description: Load custom kernel modules
+# Description:       Loads modules listed in /etc/rc.conf.d/modules
+### END INIT INFO
+
+. /lib/init/init-functions || exit 1
+
+rc_start()
+{
+	if [ -f "/etc/rc.conf.d/modules" ]
+	then
+		rc_message "Loading custom kernel modules"
+		while read mymodule mymodargs
+		do
+			case ${mymodule} in
+				""|"#"*) continue ;;
+			esac
+			modprobe ${mymodule} ${mymodargs} || failed="1"
+		done < /etc/rc.conf.d/modules
+	fi
+
+	( exit ${failed} )
+	rc_return
+}
+
+case ${1} in
+	start   ) rc_start   ;;
+	*       ) rc_error   ;;
+esac

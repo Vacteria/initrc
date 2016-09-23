@@ -1,0 +1,92 @@
+#!/bin/sh
+
+###
+# Vacteria System init script, Created on lun ene 10 14:12:34 CST 2011
+# This file is free software and is released under GPL v2.1 or grant.
+###
+
+### BEGIN INIT INFO
+# Provides:          checkfs
+# Required-Start:    udev
+# Required-Stop:     
+# Should-Start:      
+# Should-Stop:       
+# X-Start-Before:    mountfs
+# X-Stop-After:      
+# Default-Start:     S
+# Default-Stop:      
+# X-Interactive:     
+# X-vct-Provided-By: Vacteria
+# Short-Description: Checks local filesystems before mounting.
+# Description:       Checks local filesystems before mounting.
+### END INIT INFO
+
+. /lib/init/init-functions || exit 6
+
+rc_start()
+{
+	options=""
+	
+	if [ -f /fastboot ]
+	then
+		rc_message "File system is clean, fsck is not needed"
+		rc_done
+		exit 0
+	fi
+	
+	rc_message "Mounting root file system in read-only mode"
+	if ! mount -n -o remount,ro / >/dev/null
+	then
+		rc_fail
+		rc_message "Unable to mount root filesystem on read-only mode"
+		rc_message "Please, press ENTER to shotdown the system"
+		
+		read
+		
+		/etc/rc.d/halt start
+	else
+		rc_done
+	fi
+	
+	[ -f /forcefsck ] && options="-f"
+	
+	rc_message "Checking filesystems"
+	fsck ${options} -a -A -T >/run/fsck.log
+	error_value="${?}"
+	
+	printf 'fsck return exit code %s' ${error_value} >> /run/fsck.log
+	
+	case "${error_value}" in
+		0|3 ) rc_done ;;
+		1|2) 
+			rc_warn
+			rc_message "File system errors were found and have been corected"
+			if [ "${error_value}" == "2" ]
+			then
+				rc_message "but for security consistency reason reboot is needed"
+				rc_message "Please press ENTER to continue"
+		
+				read
+				/etc/init.d/reboot start
+			fi
+		;;
+		* )
+			if [[ "${error_value}" -gt 3 && "${error_value}" -lt 16 ]]
+			then
+				rc_fail
+				rc_message "File system have errors and this could not be fixed"
+				rc_message "automatically. Please, contact with you system administrator"
+				rc_message "to fixit. The system will be halted now. Press ENTER to continue"
+				
+				read
+				
+				/etc/rc.d/halt start
+			fi
+		;;
+	esac
+}
+
+case ${1} in
+	start   ) rc_start   ;;
+	*       ) rc_error   ;;
+esac

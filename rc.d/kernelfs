@@ -1,0 +1,121 @@
+#!/bin/sh
+
+###
+# Vacteria System init script, Created on lun ene 10 14:12:34 CST 2011
+# This file is free software and is released under GPL v2.1 or grant.
+###
+
+### BEGIN INIT INFO
+# Provides:          kernelfs
+# Required-Start:    
+# Required-Stop:
+# Should-Start:      
+# Should-Stop:    
+# X-Start-Before:    
+# X-Stop-After:        
+# Default-Start:     S
+# Default-Stop:
+# X-Interactive:     
+# X-vct-Provided-By: Vacteria      
+# Short-Description: Mount kernel filesystems
+# Description:       Mount all kernel vitual file sistems and set up
+#                    necesary symbolic links
+### END INIT INFO
+
+. /lib/init/init-functions || exit 6
+. /etc/rc.conf.d/kernelfs  || exit 6
+
+rc_start()
+{
+	rc_message "Mounting all virtual filesystems"
+	if ! mountpoint -q /run
+	then
+		mount -t tmpfs -o nodev,nosuid,mode=755 tmpfs /run || failed="1"
+		mkdir -p /run/{var,lock,shm}
+		chmod 1777 /run/shm
+		ln -s /run/shm /dev/shm
+	fi
+	
+	if [ ! -f /run/utmp ]
+	then
+		if [ -f /var/lib/utmp ]
+		then
+			install -m 044 -o root -g utmp /var/lib/utmp /run/utmp
+		else
+			touch /run/utmp
+			chown root:utmp /run/utmp
+		fi
+	fi
+	
+	if ! mountpoint -q /proc 
+	then
+		mount -t proc  -o nodev,noexec,nosuid proc /proc || failed="1"
+	fi
+	
+	if ! mountpoint -q /sys
+	then
+		mount -t sysfs -o nodev,noexec,nosuid sysfs /sys || failed="1"
+	fi
+	
+	if ! mountpoint -q /dev
+	then
+		mount -t devtmpfs -o nosuid,mode=755 devtmpfs /dev || failed="1"
+	fi
+
+	if [ "${USB_LEGACY}" == "1" ]
+	then
+		while read dev fs
+		do
+			if [ "${fs}" == "usbfs" ]
+			then
+				if ! mountpoint -q /proc/bus/usb
+				then
+					print_busy "Mounting /proc/bus/usb"
+					mount -n -t usbfs -o devmode=0666 usbfs /proc/bus/usb || failed="1"
+					break
+				fi
+				break
+			fi
+		done < /proc/filesystems
+	fi
+
+	if [ "${CGROUPS}"  == "1" ]
+	then
+		while read dev fs
+		do
+			if [ "${fs}" == "cgroup" ]
+			then
+				if ! mountpoint -q /sys/fs/cgroups
+				then
+					print_busy "Mounting  /sys/fs/cgroups"
+					mount -t cgroup cgroup /sys/fs/cgroup/cpu -o cpu || failed="1"
+					mkdir -m 0777 /sys/fs/cgroup/cpu/user
+					break
+				fi
+			fi
+		done < /proc/filesystems
+	fi
+
+	( exit ${failed} )
+	rc_return
+}
+
+rc_status()
+{
+	for mnt in run proc sys dev
+	do
+		printf '%s :' "${mnt}"
+		if mountpoint -q /${mnt}
+		then
+			printf "${RC_DONE} ... Done${RC_NORMAL}\n"
+		else
+			printf "${RC_WARN} ... Fail${RC_NORMAL}\n"
+		fi
+	done
+}
+
+case ${1} in
+	start   ) rc_start   ;;
+	status  ) rc_status  ;;
+	*       ) rc_error   ;;
+esac
